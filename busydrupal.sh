@@ -41,7 +41,7 @@ do_nuke() {
 
 do_deps() {
     echo "When prompted, enter $sqlrootpw for the sql root password."
-    sleep 3
+    sleep 4
     set -x
     sudo apt-get install -y $pkgs
 }
@@ -149,6 +149,10 @@ do_install_calendar6() {
     drush -y dl jquerymenu-6.x-3.3 cck views date jquery_ui calendar
     drush -y en cck views views_ui date date_popup jquery_ui calendar
 
+    # For repeating dates, need a bit more
+    drush -y dl date_repeat_instance
+    drush -y en date_repeat date_repeat_field date_repeat_instance
+
     # Some tutorial videos use the admin menu, so install that, too
     drush -y dl admin_menu
     drush -y en admin_menu
@@ -174,8 +178,12 @@ do_install_calendar7() {
     set -x
     cd "$srctop"/$projectname.git
 
-    drush -y dl ctools views date calendar
-    drush -y en ctools views views_ui date calendar
+    drush -y dl ctools views date calendar 
+    drush -y en ctools views views_ui date date_popup calendar
+
+    # For repeating dates, need a bit more
+    drush -y dl date_repeat_instance
+    drush -y en date_repeat date_repeat_field date_repeat_instance
 
     # Work around bug https://drupal.org/node/1471400
     # FIXME: remove this once this bug is fixed
@@ -200,6 +208,25 @@ to add a calendar view to the left sidebar:
 
 Opening http://www.ostraining.com/blog/drupal/calendar-in-drupal/
 for a more thorough explanation of how to get started with calendars.
+
+Notes:
+If you can't seem to enter repeating dates, be aware that
+the Date Repeat module has to be enabled before creating
+your content type.  (This script should have already done this for you.)
+
+If you get
+"calendar_plugin_style: A date argument is required when using the calendar style, but it is missing or is not using the default date."
+when displaying your calendar, you've hit
+https://drupal.org/node/1490892
+To fix, edit your view,
+- add a 'Contextual Filter',
+- set 'Provide default value' to 'Current Date'
+- save
+
+If you get 
+"Undefined index: tz in date_ical_date() (line 620 of ../modules/date/date_api/date_api_ical.inc)"
+when editing a repeating event, apply the patch from
+https://drupal.org/node/1633146
 _EOF_
 }
 
