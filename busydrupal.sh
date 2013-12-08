@@ -8,7 +8,7 @@ set -e
 if false
 then
     drupalmajor=6
-    drupalminor=28
+    drupalminor=29
 else
     drupalmajor=7
     drupalminor=24
