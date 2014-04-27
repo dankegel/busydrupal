@@ -5,6 +5,7 @@
 set -e
 
 drupalmajor=7
+drupalminor=27
 
 # Don't use this password if your MySQL server is on the public internet
 sqlrootpw="q9z7a1"
@@ -18,13 +19,19 @@ projectname="busydrupal"
 # reproduce everything cleanly.
 pkgs="mysql-client mysql-server drush php5-gd apache2 libapache2-mod-php5"
 
-do_nuke() {
-    echo "=== Warning, destroying all mysql data; also removing $srctop ==="
+do_uninstall_deps() {
+    echo "=== Warning, destroying all mysql data ==="
     set -x
     sudo apt-get remove $pkgs || true
     sudo apt-get purge $pkgs || true
     sudo apt-get autoremove || true
-    sudo rm -rf "$srctop"
+}
+
+do_nuke() {
+    echo "=== Warning, removing $srctop ==="
+    set -x
+    find "$srctop" -type d -print0 | xargs -0 chmod +w
+    rm -rf "$srctop"
 }
 
 do_deps() {
@@ -34,19 +41,29 @@ do_deps() {
     sudo apt-get install -y $pkgs
 }
 
-do_initgit() {
+do_mirror() {
+    # Set up a mirror of drupal core
+    # (Useful mostly for speeding up iterations of this script during testing)
+    rm -rf ~/mirrors/drupal.git
+    mkdir -p ~/mirrors/drupal.git
+    git clone --bare http://git.drupal.org/project/drupal.git ~/mirrors/drupal.git
+}
+
+do_branch() {
     set -x
     # Prepare our master project repository
     mkdir -p "$srctop"/$projectname
-    cd "$srctop"/$projectname
-    git init
+    cd "$srctop"
 
     # Grab drupal
-    drush dl drupal-$drupalmajor
-    eval mv drupal-$drupalmajor*/* .
-    eval mv drupal-$drupalmajor*/.htaccess .
-    eval mv drupal-$drupalmajor*/.gitignore .
-    rmdir drupal-$drupalmajor*
+    git clone ~/mirrors/drupal.git $projectname
+    cd $projectname
+    git checkout $drupalmajor.x
+    git reset --hard $drupalmajor.$drupalminor
+    git status
+
+    # We're declaring our project to be the master branch (conveniently, drupal doesn't use that branch)
+    git checkout -b master
 
     # Add a .gitignore file
     cat > .gitignore <<_EOF_
@@ -57,23 +74,20 @@ sites/*/files
 sites/*/private
 _EOF_
     git add .gitignore
+
     git commit -m "First commit for project $projectname"
 }
 
 do_install() {
     if ! test -d "$srctop"/$projectname
     then
-        echo "Please run '$0 initgit' first."
+        echo "Please run '$0 branch' first."
         exit 1
     fi
     set -x
     cd "$srctop"/$projectname
-    drush si --db-url=mysql://root:$sqlrootpw@localhost/drupal --account-name=drupal --account-pass=drupal
-
-    # Thanks to http://befused.com/drupal/drush-devel-generate
-    drush dl devel
-    drush en devel -y
-    drush en devel_generate -y
+    # Note: older versions of drush didn't need the 'standard' word
+    drush si standard --site-name=Example --db-url=mysql://root:$sqlrootpw@localhost/drupal --account-name=drupal --account-pass=drupal
 
     # FIXME: This is insecure, but required to pass the status report tests
     chmod 777 sites/default/files
@@ -91,7 +105,29 @@ do_install() {
     echo "To turn on overrides, you might need to do 'sudo a2enmod rewrite'"
     echo "and add a paragraph for $wwwdir/$projectname in" /etc/apache2/sites-enabled/000-default*
     echo "per https://drupal.org/getting-started/clean-urls"
+    echo "You may also need to set base_url in sites/default/settings.php"
     xdg-open http://localhost/$projectname 2> /dev/null || true
+}
+
+do_install_modules()
+{
+    for m
+    do
+        drush dl $m
+        git add sites/all/modules/$m
+        git commit -m "Add module $m"
+    done
+}
+
+do_install_base_modules() {
+    set -x
+    cd "$srctop"/$projectname
+
+    do_install_modules ctools devel features views
+    drush en -y ctools
+    drush en -y devel devel_generate
+    drush en -y features
+    drush en -y views views_ui
 }
 
 do_install_calendar7() {
@@ -103,11 +139,8 @@ do_install_calendar7() {
     set -x
     cd "$srctop"/$projectname
 
-    drush -y dl ctools views date calendar 
-    drush -y en ctools views views_ui date date_popup calendar
-
-    # For repeating dates, need a bit more
-    drush -y dl date_repeat_instance
+    do_install_modules date calendar date_repeat_instance
+    drush -y en ctools views_ui date date_popup calendar
     drush -y en date_repeat date_repeat_field date_repeat_instance
 
     # Work around bug https://drupal.org/node/1471400
@@ -115,6 +148,8 @@ do_install_calendar7() {
     wget https://drupal.org/files/calendar-php54-1471400-58.patch
     cat calendar-php54-1471400-58.patch | \
         (cd sites/all/modules/calendar; patch -p1)
+    git add sites/all/modules/calendar
+    git commit -m "calendar: apply patch for bug 1471400"
 
     xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/ 2> /dev/null || true
     cat << _EOF_
@@ -160,12 +195,6 @@ do_install_calendar() {
     7) do_install_calendar7 ;;
     *) echo "what?"; exit 1;;
     esac
-}
-
-do_install_features() {
-    cd "$srctop"/$projectname
-    drush dl features
-    drush en features -y
 }
 
 do_fake() {
@@ -264,7 +293,7 @@ do_restore() {
 }
 
 usage() {
-    echo "Usage: $0 [nuke|deps|initgit|clone|install|fake Nodes|bench Sessions|nuke]"
+    echo "Usage: $0 [nuke|deps|uninstall_deps|mirror|branch|install|fake Nodes|bench Sessions|nuke]"
     echo "Example of how to create a Drupal project using git, and benchmark it."
     echo "DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA."
     echo "Run each of the verb in order (e.g. $0 nuke; $0 deps; $0 initgit; ...)"
@@ -274,11 +303,13 @@ usage() {
 
 case $1 in
 nuke) do_nuke;;
+uninstall_deps) do_uninstall_deps;;
 deps) do_deps;;
-initgit) do_initgit;;
+mirror) do_mirror;;
+branch) do_branch;;
 install) do_install;;
+install_base_modules) do_install_base_modules;;
 install_calendar) do_install_calendar;;
-install_features) do_install_features;;
 fake) do_fake $2;;
 bench) do_benchmark $2;;
 backup) do_backup "$2";;
