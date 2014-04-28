@@ -13,7 +13,12 @@ sqlrootpw="q9z7a1"
 # Let's keep our git client at $srctop/$projectname
 # Always quote srctop and giturl, since $HOME might have spaces in it.
 srctop="$HOME"/drupaldemo.tmp
-projectname="busydrupal"
+projectname="caldemo"
+
+# Where our master repository (source of truth) is
+barerepo="$HOME"/bare/$projectname.git
+# Edit this to be the hostname of the machine you're doing the first part of the demo on
+barerepohostname=caldemo-dev1
 
 # Ubuntu packages we need to install and uninstall in order to
 # reproduce everything cleanly.
@@ -49,15 +54,24 @@ do_mirror() {
     git clone --bare http://git.drupal.org/project/drupal.git ~/mirrors/drupal.git
 }
 
-do_branch() {
+do_initgit() {
     set -x
+
+    # Prepare our shared repo (eventually this would be on github)
+    mkdir "$barerepo"
+    cd "$barerepo"
+    git init --bare
+
     # Prepare our master project repository
     mkdir -p "$srctop"/$projectname
     cd "$srctop"
 
-    # Grab drupal
-    git clone ~/mirrors/drupal.git $projectname
+    git clone "$barerepo" $projectname
     cd $projectname
+
+    # Grab drupal
+    git remote add drupal ~/mirrors/drupal.git
+    git fetch drupal
     git checkout $drupalmajor.x
     git reset --hard $drupalmajor.$drupalminor
     git status
@@ -76,12 +90,15 @@ _EOF_
     git add .gitignore
 
     git commit -m "First commit for project $projectname"
+
+    # Do initial push to our master repo
+    git push origin master --tags
 }
 
 do_install() {
     if ! test -d "$srctop"/$projectname
     then
-        echo "Please run '$0 branch' first."
+        echo "Please run '$0 initgit' or '$0 clone' first."
         exit 1
     fi
     set -x
@@ -153,40 +170,17 @@ do_install_calendar7() {
 
     xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/ 2> /dev/null || true
     cat << _EOF_
-Calendar module enabled.  Now perform the following steps in the gui
-to add a calendar view to the left sidebar:
+Now follow http://www.ostraining.com/blog/drupal/calendar-in-drupal/
+to configure your calendar, and verify you can enter a few events.
 
-1. Add a view for the calendar
- Structure > Views > Add view from template
- "A calendar view of the 'created' field in the 'comment' base table" > add
- Continue, Save
+Once it's working, follow http://www.ostraining.com/blog/drupal/features/
+to save the calendar configuration as a Feature named mycalmod.
 
-2. Put the block in a region
- Structure > Blocks
- "View: Calendar" > Sidebar First
- Save Blocks
+Then download the Feature, unpack it into sites/all/modules, do 'git add mycalmod',
+and 'git commit -m "Added Feature mycalmod".'
 
-Opening http://www.ostraining.com/blog/drupal/calendar-in-drupal/
-for a more thorough explanation of how to get started with calendars.
-
-Notes:
-If you can't seem to enter repeating dates, be aware that
-the Date Repeat module has to be enabled before creating
-your content type.  (This script should have already done this for you.)
-
-If you get
-"calendar_plugin_style: A date argument is required when using the calendar style, but it is missing or is not using the default date."
-when displaying your calendar, you've hit
-https://drupal.org/node/1490892
-To fix, edit your view,
-- add a 'Contextual Filter',
-- set 'Provide default value' to 'Current Date'
-- save
-
-If you get 
-"Undefined index: tz in date_ical_date() (line 620 of ../modules/date/date_api/date_api_ical.inc)"
-when editing a repeating event, apply the patch from
-https://drupal.org/node/1633146
+Then do git push, and move on to trying to use the git repo from a second
+machine (as described in usage message).
 _EOF_
 }
 
@@ -197,122 +191,50 @@ do_install_calendar() {
     esac
 }
 
-do_fake() {
-    n=$1
-    if test "$n" = "" || test $n -lt 1
+do_clone() {
+    # You should be on the second machine now
+    if ! ssh $barerepohostname true
     then
-        echo "Please specify a node count greater than zero."
-        exit 1
+        echo "If $barerepohostname is not the hostname where you ran the first half of this demo,"
+        echo "please edit this script to set the variable barehostname to that hostname."
+        echo "Then make sure you can ssh there."
     fi
-    set -x
-    cd "$srctop"/$projectname
-
-    # Use generate-content module
-    # See also http://befused.com/drupal/drush-devel-generate
-
-    case $drupalmajor in
-    7)
-      echo "Working around problem (in drupal 7 only?) where generated content images don't show up"
-      for size in large medium
-      do
-        mkdir -p sites/default/files/styles/$size/public
-        if ! test -d sites/default/files/styles/$size/public/field/.
-        then
-            ln -s ../../../field sites/default/files/styles/$size/public
-        fi
-      done
-      ;;
-    *) echo "what?"; exit 1;;
-    esac
-
-    echo "============= Fake: $n fake nodes ============="
-    drush generate-content $n --kill
-}
-
-do_benchmark() {
-    c=$1
-    if test "$c" = "" || test $c -lt 1
-    then
-        echo "Please specify a session count greater than zero."
-        exit 1
-    fi
-    set -x
-    cd "$srctop"/$projectname
-    # Find first valid page
-    node=`mysql -u root -p$sqlrootpw drupal -e "select nid from node limit 0,1;" | awk '/[0-9]/{print }'`
-    url=http://localhost/$projectname/node/$node
-    tries=`expr $c '*' 3`
-    echo "============= Benchmark: $c concurrent sessions ============="
-    ab -n $tries -c $c $url
-}
-
-do_backup() {
-    f="$1"
-    f="`echo $f`"
-    case "$f" in
-    /*.tar.gz);;
-    *)
-        echo "Please specify an absolute path to a .tar.gz file to back up to... $f doesn't look like one."
-        exit 1
-        ;;
-    esac
-    set -x
-    cd "$srctop"/$projectname
-    drush vset maintenance_mode 1
-    # FIXME: this list doesn't work for things like cck?
-    drush pm-list | grep "Enabled" | sed 's/.*(//;s/).*//' > backup-modules.txt
-    # Restoring is really slow without turning off autocommit, etc.
-    echo "
-SET autocommit=0;
-SET unique_checks=0;
-SET foreign_key_checks=0;" > backup-mysql.dump
-    mysqldump -u root -p$sqlrootpw drupal >> backup-mysql.dump
-echo "COMMIT;" >> backup-mysql.dump
-    tar -czvf "$1" --exclude libraries --exclude modules backup-modules.txt backup-mysql.dump sites
-    drush vset maintenance_mode 0
-}
-
-do_restore() {
-    f="$1"
-    case "$f" in
-    /*.tar.gz);;
-    *)
-        echo "Please specify an absolute path to a .tar.gz file to restore from."
-        exit 1
-        ;;
-    esac
-    set -x
-    cd "$srctop"/$projectname
-    tar -xzvf "$f"
-    drush vset maintenance_mode 1
-    drush dl `cat backup-modules.txt`
-    drush en `cat backup-modules.txt`
-    # Use pv to get progress bar
-    pv backup-mysql.dump | mysql -u root -p$sqlrootpw drupal
-    drush vset maintenance_mode 0
+    mkdir -p "$srctop"
+    cd "$srctop"
+    git clone ${barerepohostname}:${barerepo} $projectname
+    echo "Now run $0 install and see if the site comes up"'!'
 }
 
 usage() {
-    echo "Usage: $0 [nuke|deps|uninstall_deps|mirror|branch|install|fake Nodes|bench Sessions|nuke]"
-    echo "Example of how to create a Drupal project using git, and benchmark it."
-    echo "DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA."
-    echo "Run each of the verb in order (e.g. $0 nuke; $0 deps; $0 initgit; ...)"
-    echo "The fake verb takes an argument: how many fake nodes to create"
-    echo "The bench verb takes an argument: how many simultaneous users."
+    cat <<_EOF_
+Usage: $0 [deps|mirror|initgit|install|install_base_modules|install_calendar|nuke|uninstall_deps]
+Example of a git workflow for Drupal.
+DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA.
+Run each of the verb in order, e.g.
+ $0 deps
+ $0 mirror
+ $0 initgit
+ $0 install
+ $0 install_base_modules
+ $0 install_calendar (and follow instructions to create and check in a Feature)
+ git push
+ 
+Then on a second machine:
+ $0 deps
+ $0 clone
+ $0 install
+and verify the calendar works on the second machine!
 }
 
 case $1 in
-nuke) do_nuke;;
-uninstall_deps) do_uninstall_deps;;
 deps) do_deps;;
 mirror) do_mirror;;
-branch) do_branch;;
+initgit) do_initgit;;
 install) do_install;;
 install_base_modules) do_install_base_modules;;
 install_calendar) do_install_calendar;;
-fake) do_fake $2;;
-bench) do_benchmark $2;;
-backup) do_backup "$2";;
-restore) do_restore "$2";;
+clone) do_clone;;
+nuke) do_nuke;;
+uninstall_deps) do_uninstall_deps;;
 *) usage; exit 1;;
 esac

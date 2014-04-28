@@ -23,11 +23,12 @@ Scenario illustrating site creation and adding one feature:
 - Deveoper A uses "drush dl features" to download the features module,
   checks that into git, and pushes
 - Developer B forks the repo on github, adds a new feature
-  (e.g. a calendar per http://www.ostraining.com/blog/drupal/calendar-in-drupal)
+  (e.g. a calendar per http://www.ostraining.com/blog/drupal/calendar-in-drupal,
+  but with 'repeat' enabled in content type)
   creates a Feature encapsulating the config changes per
   http://www.ostraining.com/blog/drupal/features,
   commits each new module as a single command,
-  then commits the configuration Feature and any custom code to git as a single commit,
+  then commits the Feature and any custom code to git as a single commit,
   pushes to her fork of the project, and
   does a pull request per https://help.github.com/articles/using-pull-requests
 - Developer A receives the pull request and reviews it.  If it looks good,
