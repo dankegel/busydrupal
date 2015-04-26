@@ -10,14 +10,16 @@ sqlrootpw="q9z7a1"
 
 # Ubuntu packages we need to install and uninstall in order to
 # reproduce everything cleanly.
-pkgs="mysql-client mysql-server drush apache2 libapache2-mod-php5"
+pkgs="mysql-client mysql-server drush apache2 libapache2-mod-php5 php5-gd"
 
 workdir=$HOME/migrate-demo.tmp
 
 do_undeps() {
     echo "=== Warning, destroying all mysql data ==="
-    sudo apt-get remove $pkgs || true
-    sudo apt-get purge $pkgs || true
+    echo "Only do this if you really want a clean system and have no apache or mysql config you care about"
+    morepkgs=`dpkg-query -l mysql* | awk '/ii/ {print $2}'`
+    sudo apt-get remove $pkgs $morepkgs || true
+    sudo apt-get purge $pkgs $morepkgs || true
     sudo apt-get autoremove || true
 }
 
@@ -69,6 +71,7 @@ _EOF_
 
     echo "Opening drupal$major site in your browser"
     xdg-open http://drupal$major
+    sleep 1
 }
 
 do_install6() {
@@ -125,6 +128,10 @@ add a calendar view to the left sidebar, e.g.
   "Calendar" > Left Sidebar
   Save Blocks
 
+Notes:
+If you get
+"Strict warning: Declaration of calendar_plugin_display_page::options_submit() should be compatible with views_plugin_display_page::options_submit..."
+see patch at https://www.drupal.org/node/999514
 _EOF_
     xdg-open https://drupal.org/node/1775076
     xdg-open http://vimeo.com/6544779
