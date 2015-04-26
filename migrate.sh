@@ -1,5 +1,6 @@
 #!/bin/sh
 # Simple script to demonstrate migrating calendar data from drupal 6 to drupal 7.
+# Written for Ubuntu 14.04, might need adjusting to run on other systems.
 # DO NOT RUN ON SYSTEMS WITH MYSQL OR APACHE2 INSTALLED.  IT WILL NUKE ALL THEIR DATA.
 
 set -e
@@ -9,11 +10,11 @@ sqlrootpw="q9z7a1"
 
 # Ubuntu packages we need to install and uninstall in order to
 # reproduce everything cleanly.
-pkgs="mysql-client mysql-server drush apache2"
+pkgs="mysql-client mysql-server drush apache2 libapache2-mod-php5"
 
 workdir=$HOME/migrate-demo.tmp
 
-do_purge() {
+do_undeps() {
     echo "=== Warning, destroying all mysql data ==="
     sudo apt-get remove $pkgs || true
     sudo apt-get purge $pkgs || true
@@ -21,13 +22,16 @@ do_purge() {
 }
 
 do_clean() {
-    rm -rf "$workdir" || (chmod -R 755 "$workdir" && rm -rf "$workdir" )
+    rm -rf "$workdir" 2> /dev/null || (chmod -R 755 "$workdir" && rm -rf "$workdir" )
+    sudo rm -f /etc/apache2/sites-*/migrate-demo*
 }
 
 do_deps() {
     echo "When prompted, enter $sqlrootpw for the sql root password."
     sleep 4
     sudo apt-get install -y $pkgs
+    sudo a2enmod rewrite
+    sudo service apache2 restart
 }
 
 # Usage: my_download url filename
@@ -38,6 +42,30 @@ my_download_and_unpack() {
         ( mkdir -p $_mycdir; cd $_mycdir; wget $1 )
     fi
     tar -xf $_mycdir/$2
+}
+
+my_enable_site() {
+    major=`echo $dir | sed 's/drupal-//;s/\..*//'`
+    cat > migrate-demo-drupal$major.conf <<_EOF_
+<VirtualHost *:80>
+	ServerName drupal$major
+
+	ServerAdmin webmaster@localhost
+	DocumentRoot $workdir/$dir
+	ErrorLog \${APACHE_LOG_DIR}/error.log
+	CustomLog \${APACHE_LOG_DIR}/access.log combined
+	<Directory $workdir/$dir>
+		Options Indexes FollowSymLinks
+		AllowOverride None
+		Require all granted
+	</Directory>
+</VirtualHost>
+_EOF_
+    sudo cp -f migrate-demo-drupal$major.conf /etc/apache2/sites-available
+    sudo ln -sf ../sites-available/migrate-demo-drupal$major.conf /etc/apache2/sites-enabled
+    sudo service apache2 restart
+    echo "127.0.0.1  drupal$major" | sudo tee -a /etc/hosts
+    xdg-open http://drupal$major
 }
 
 do_install6() {
@@ -73,11 +101,14 @@ do_install6() {
 
     # For repeating dates, need a bit more
     drush -y dl date_repeat_instance
-    drush -y en date_repeat date_repeat_field date_repeat_instance
+    drush -y en date_repeat date_repeat_instance
 
     # Some tutorial videos use the admin menu, so install that, too
     drush -y dl admin_menu
     drush -y en admin_menu
+
+    # Enable the site in apache
+    my_enable_site
 
     echo "Calendar module enabled.  Now configure it as described in this tutorial:"
     xdg-open http://vimeo.com/6544779
@@ -115,6 +146,9 @@ do_install7() {
     drush -y dl date_repeat_instance
     drush -y en date_repeat date_repeat_field date_repeat_instance
 
+    # Enable the site in apache
+    my_enable_site
+
     xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/
     cat << _EOF_
 Calendar module enabled.  Now perform the following steps in the gui
@@ -146,10 +180,10 @@ _EOF_
 }
 
 usage() {
-    echo "Usage: $0 [nuke|deps|install6|install7]"
+    echo "Usage: $0 [undeps|deps|clean|install6|install7]"
     echo "Example of how to create a Drupal project in both drupal 6 and 7 and migrate data from 6 to 7."
     echo "DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA."
-    echo "Run each of the verb in order (e.g. $0 nuke; $0 deps; $0 install6; $0 install7)"
+    echo "Run each of the verb in order (e.g. $0 undeps; $0 deps; $0 clean; $0 install6; $0 install7)"
 }
 
 set -x
@@ -158,7 +192,7 @@ mkdir -p $workdir
 cd $workdir
 
 case $1 in
-purge) do_purge;;
+undeps) do_undeps;;
 clean) do_clean;;
 deps) do_deps;;
 install6) do_install6;;
