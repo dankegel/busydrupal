@@ -65,6 +65,8 @@ _EOF_
     sudo ln -sf ../sites-available/migrate-demo-drupal$major.conf /etc/apache2/sites-enabled
     sudo service apache2 restart
     echo "127.0.0.1  drupal$major" | sudo tee -a /etc/hosts
+
+    echo "Opening drupal$major site in your browser"
     xdg-open http://drupal$major
 }
 
@@ -110,16 +112,21 @@ do_install6() {
     # Enable the site in apache
     my_enable_site
 
-    echo "Calendar module enabled.  Now configure it as described in this tutorial:"
-    xdg-open http://vimeo.com/6544779
-    echo "or this one:"
-    xdg-open https://drupal.org/node/1775076
     cat << _EOF_
-Then put the block in a region, e.g.
+Calendar module enabled.
+Opening a tutorial or two in your browser
+for an explanation of how to get started with calendars.
+
+Follow them to create an Event content type, then
+add a calendar view to the left sidebar, e.g.
+1.  Put the block in a region, e.g.
   Site Building > Blocks > List
   "Calendar" > Left Sidebar
   Save Blocks
+
 _EOF_
+    xdg-open https://drupal.org/node/1775076
+    xdg-open http://vimeo.com/6544779
 }
 
 do_install7() {
@@ -139,7 +146,7 @@ do_install7() {
     echo  http://www.ostraining.com/blog/drupal/calendar-in-drupal/
     echo  http://drupalize.me/series/calendars-drupal-7
 
-    drush -y dl ctools views date calendar 
+    drush -y dl ctools views date calendar
     drush -y en ctools views views_ui date date_popup calendar
 
     # For repeating dates, need a bit more
@@ -149,10 +156,13 @@ do_install7() {
     # Enable the site in apache
     my_enable_site
 
-    xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/
     cat << _EOF_
-Calendar module enabled.  Now perform the following steps in the gui
-to add a calendar view to the left sidebar:
+Calendar module enabled.
+Opening a tutorial or two in your browser
+for an explanation of how to get started with calendars.
+
+Follow them to create an Event content type, then
+add a calendar view to the left sidebar, e.g.
 
 1. Add a view for the calendar
  Structure > Views > Add view from template
@@ -164,19 +174,18 @@ to add a calendar view to the left sidebar:
  "View: Calendar" > Sidebar First
  Save Blocks
 
-Opening http://www.ostraining.com/blog/drupal/calendar-in-drupal/
-for a more thorough explanation of how to get started with calendars.
-
 Notes:
 If you can't seem to enter repeating dates, be aware that
 the Date Repeat module has to be enabled before creating
 your content type.  (This script should have already done this for you.)
 
-If you get 
+If you get
 "Undefined index: tz in date_ical_date() (line 620 of ../modules/date/date_api/date_api_ical.inc)"
 when editing a repeating event, apply the patch from
 https://drupal.org/node/1633146
 _EOF_
+    xdg-open https://www.drupal.org/node/1250714
+    xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/
 }
 
 usage() {
