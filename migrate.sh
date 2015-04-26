@@ -114,7 +114,7 @@ do_install6() {
     my_enable_site
 
     cat << _EOF_
-Calendar module enabled.
+Calendar and date modules installed and enabled.
 Opening a tutorial or two in your browser
 for an explanation of how to get started with calendars.
 
@@ -158,7 +158,7 @@ do_install7() {
     my_enable_site
 
     cat << _EOF_
-Calendar module enabled.
+Calendar and date modules installed and enabled.
 Opening a tutorial or two in your browser
 for an explanation of how to get started with calendars.
 
@@ -187,6 +187,7 @@ https://drupal.org/node/1633146
 _EOF_
     xdg-open https://www.drupal.org/node/1250714
     xdg-open http://www.ostraining.com/blog/drupal/calendar-in-drupal/
+    xdg-open https://www.youtube.com/watch?v=6Tr1sZBFRWU
 }
 
 usage() {
