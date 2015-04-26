@@ -56,7 +56,8 @@ my_enable_site() {
 	CustomLog \${APACHE_LOG_DIR}/access.log combined
 	<Directory $workdir/$dir>
 		Options Indexes FollowSymLinks
-		AllowOverride None
+                # Need override for clean urls to work
+		AllowOverride All
 		Require all granted
 	</Directory>
 </VirtualHost>
