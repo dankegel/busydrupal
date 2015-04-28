@@ -115,6 +115,10 @@ do_install6() {
 
     # Enable the site in apache
     my_enable_site
+    do_doc6
+}
+
+do_doc6() {
 
     cat << _EOF_
 Calendar and date modules installed and enabled.
@@ -164,6 +168,10 @@ do_install7() {
     # Enable the site in apache
     my_enable_site
 
+    do_doc7
+}
+
+do_doc7() {
     cat << _EOF_
 Calendar and date modules installed and enabled.
 Opening a tutorial or two in your browser
@@ -198,10 +206,20 @@ _EOF_
 }
 
 usage() {
-    echo "Usage: $0 [undeps|deps|clean|install6|install7]"
-    echo "Example of how to create a Drupal project in both drupal 6 and 7 and migrate data from 6 to 7."
-    echo "DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA."
-    echo "Run each of the verb in order (e.g. $0 undeps; $0 deps; $0 clean; $0 install6; $0 install7)"
+    cat <<_EOF_
+Usage: $0 [undeps|deps|clean|install6|install7|doc6|doc7]
+Example of how to create a calendar in both Drupal 6 and 7
+(and eventually how migrate data from 6 to 7).
+DO NOT RUN ON SYSTEMS WITH MYSQL INSTALLED.  IT WILL NUKE ALL MYSQL DATA.
+Options:
+  $0 undeps    (uninstalls all needed packages, optional)
+  $0 deps      (installs all needed packages, optional)
+  $0 clean     (removes $workdir, optional)
+  $0 install6  (installs Drupal 6 etc. to $workdir/drupal-6.xx)
+  $0 install7  (installs Drupal 7 etc. to $workdir/drupal-7.xx)
+  $0 doc6      (open related Drupal 6 tutorials in browser)
+  $0 doc7      (open related Drupal 7 tutorials in browser)
+_EOF_
 }
 
 set -x
@@ -215,5 +233,7 @@ clean) do_clean;;
 deps) do_deps;;
 install6) do_install6;;
 install7) do_install7;;
+doc6) do_doc6;;
+doc7) do_doc7;;
 *) usage; exit 1;;
 esac
