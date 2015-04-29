@@ -102,7 +102,7 @@ do_install6() {
     (cd sites/all/libraries; my_download_and_unpack https://github.com/jquery/jquery-ui/archive/1.6.tar.gz 1.6.tar.gz )
     mv sites/all/libraries/jquery-ui-1.6/ sites/all/libraries/jquery.ui
 
-    drush -y dl jquerymenu-6.x-3.3 cck views date jquery_ui calendar
+    drush -y dl jquerymenu-6.x-3.3 cck views-6.x-3.2 date jquery_ui calendar
     drush -y en views views_ui date date_popup jquery_ui calendar
 
     # For repeating dates, need a bit more
